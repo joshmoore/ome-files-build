@@ -54,6 +54,11 @@ RUN cmake \
     /git/superbuild
 
 RUN make
-RUN python2 setup.py install && git clean -dfx && python3 setup.py install
+USER root
 RUN make install
 RUN ldconfig
+RUN chown -R ome-files /usr/local
+USER ome-files
+WORKDIR /git/ome-files-py
+RUN python2 setup.py install && git clean -dfx && python3 setup.py install
+WORKDIR /build
