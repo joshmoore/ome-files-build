@@ -1,0 +1,68 @@
+FROM centos:centos7
+MAINTAINER ome-devel@lists.openmicroscopy.org.uk
+
+ENV LOCALE=en_US
+ENV CHARSET=UTF-8
+
+RUN yum -y install epel-release && yum -y update && yum -y clean all
+
+RUN yum groupinstall -y "Development Tools"
+RUN yum install -y \
+  cmake3 \
+  git \
+  man \
+  boost-devel \
+  xerces-c-devel \
+  xalan-c-devel \
+  libpng-devel \
+  gtest-devel \
+  libtiff-devel \
+  locales \
+  python-pip \
+  python-devel python-pip \
+  python34-devel python34-pip \
+  centos-release-scl \
+  scl-utils \
+&& \
+  yum install -y \
+  devtoolset-4-toolchain \
+  devtoolset-7-toolchain
+
+ENV LC_ALL=${LOCALE}.${CHARSET}
+ENV LANG=${LOCALE}.${CHARSET}
+
+COPY /.git /git/.git
+COPY /ome-common /git/ome-common
+COPY /ome-files /git/ome-files
+COPY /ome-files-performance /git/ome-files-performance
+COPY /ome-files-py /git/ome-files-py
+COPY /ome-model /git/ome-model
+COPY /ome-qtwidgets /git/ome-qtwidgets
+COPY /scripts /git/scripts
+COPY /superbuild /git/superbuild
+
+RUN /git/scripts/docker-python.sh
+RUN /git/scripts/docker-user.sh
+
+WORKDIR /build
+
+ENV CMAKE_BUILD_TYPE=Release
+
+RUN scl enable devtoolset-7 -- cmake3 \
+    -Dgit-dir=/git \
+    -Dbuild-prerequisites=OFF \
+    -Dome-superbuild_BUILD_gtest=ON \
+    -Dbuild-packages=ome-files \
+    -DCMAKE_BUILD_TYPE=Release \
+    /git/superbuild
+RUN scl enable devtoolset-7 -- make
+USER root
+RUN scl enable devtoolset-7 -- make install
+RUN echo "/usr/local/lib" > /etc/ld.so.conf.d/usr-local.conf
+RUN ldconfig
+RUN chown -R ome-files /usr/local
+WORKDIR /git/ome-files-py
+RUN scl enable devtoolset-4 -- python2 setup.py install
+RUN git clean -dfx
+RUN scl enable devtoolset-4 -- python3 setup.py install
+WORKDIR /build
