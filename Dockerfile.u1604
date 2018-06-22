@@ -1,0 +1,81 @@
+FROM ubuntu:16.04
+MAINTAINER ome-devel@lists.openmicroscopy.org.uk
+
+RUN apt-get update && apt-get -y install \
+  build-essential \
+  cmake \
+  git \
+  man \
+  libboost-all-dev \
+  libxerces-c-dev \
+  libxalan-c-dev \
+  libpng-dev \
+  libgtest-dev \
+  libtiff5-dev \
+  locales \
+  python-pip \
+  && locale-gen en_US.UTF-8
+
+ENV LC_ALL=en_US.UTF-8
+ENV LANG=en_US.UTF-8
+
+RUN pip install --upgrade pip
+RUN pip install Genshi
+RUN pip install Sphinx
+
+RUN useradd -ms /bin/bash ome-files && mkdir /build
+
+COPY /ome-common /git/ome-common
+COPY /ome-files /git/ome-files
+COPY /ome-files-performance /git/ome-files-performance
+COPY /ome-files-py /git/ome-files-py
+COPY /ome-model /git/ome-model
+COPY /ome-qtwidgets /git/ome-qtwidgets
+COPY /superbuild /git/superbuild
+
+RUN chown -R ome-files:ome-files /git /build
+USER ome-files
+WORKDIR /build
+
+RUN cmake \
+    -Dgit-dir=/git \
+    -Dbuild-prerequisites=OFF \
+    -Dome-superbuild_BUILD_gtest=ON \
+    -Dbuild-packages=ome-files \
+    -DCMAKE_BUILD_TYPE=Release \
+    /git/superbuild
+RUN make
+
+# TODO: this should be moved up
+USER root
+RUN chown -R ome-files:ome-files /usr/local
+USER ome-files
+
+RUN make install
+
+USER root
+RUN ldconfig
+
+##
+## ome-files-py
+##
+RUN apt-get install -y python3-dev python3-pip
+
+RUN pip3 install --upgrade pip
+
+RUN pip2 install pybind11
+RUN pip2 install pytest
+RUN pip2 install numpy
+RUN pip2 install libtiff
+RUN pip3 install pybind11
+RUN pip3 install pytest
+RUN pip3 install numpy
+RUN pip3 install git+git://github.com/pearu/pylibtiff
+
+# Copy git for tag info, etc.
+COPY /.git /git/.git
+WORKDIR /git/ome-files-py
+RUN python2 setup.py install && git clean -dfx && python3 setup.py install
+
+WORKDIR /
+RUN pip2 install --force-reinstall --upgrade pip
